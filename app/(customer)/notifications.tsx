@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 import { ArrowLeft, Bell } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 import { useT } from '@/context/AppContext';
+import Logo from '@/components/Logo';
 
 interface Notification {
   id: string;
@@ -86,6 +87,9 @@ export default function NotificationsScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
+      <View style={styles.logoRow}>
+        <Logo size="small" />
+      </View>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
           <ArrowLeft color={Colors.white} size={24} />
@@ -104,7 +108,11 @@ export default function NotificationsScreen() {
           ItemSeparatorComponent={() => <View style={styles.divider} />}
         />
 
-        <TouchableOpacity style={styles.settingsBtn}>
+        <TouchableOpacity
+          style={styles.settingsBtn}
+          onPress={() => router.push('/(customer)/notification-settings')}
+          activeOpacity={0.8}
+        >
           <Text style={styles.settingsBtnText}>{t('notificationSettings')}</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -185,5 +193,11 @@ const styles = StyleSheet.create({
     color: Colors.teal,
     fontSize: 14,
     fontFamily: 'Poppins-SemiBold',
+  },
+  logoRow: {
+    paddingHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 10,
+    alignItems: 'flex-start',
   },
 });

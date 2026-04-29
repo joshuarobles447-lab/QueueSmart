@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  Alert,
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, SafeAreaView, ScrollView, KeyboardAvoidingView, Platform,
 } from 'react-native';
@@ -9,6 +10,7 @@ import { Colors } from '@/constants/colors';
 import { useApp, useT } from '@/context/AppContext';
 import Logo from '@/components/Logo';
 import LanguagePicker from '@/components/LanguagePicker';
+import { supabase } from '@/lib/supabase';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -20,10 +22,60 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert('Error', 'Please enter your email and password.');
+      return;
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail.endsWith('@hcdc.edu.ph')) {
+      Alert.alert('Invalid email', 'Only @hcdc.edu.ph accounts can log in.');
+      return;
+    }
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: normalizedEmail,
+      password,
+    });
+
+    if (error) {
+      Alert.alert('Login failed', error.message);
+      return;
+    }
+
+    const userId = data.user?.id;
+    if (!userId) {
+      Alert.alert('Login failed', 'Unable to get user session.');
+      return;
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', userId)
+      .single();
+
+    if (profileError || !profile?.role) {
+      Alert.alert('Login failed', 'Account not recognized or not authorized. Please sign up first.');
+      return;
+    }
+
+    const { data: signupEvent, error: signupError } = await supabase
+      .from('signup_events')
+      .select('id')
+      .eq('user_id', userId)
+      .single();
+
+    if (signupError || !signupEvent) {
+      Alert.alert('Login failed', 'This account has not signed up through the system.');
+      return;
+    }
+
+    const role = profile.role;
     setIsLoggedIn(true);
-    const role = paramRole === 'staff' ? 'staff' : 'customer';
     setRole(role);
+
     if (role === 'staff') {
       router.replace('/(staff)');
     } else {

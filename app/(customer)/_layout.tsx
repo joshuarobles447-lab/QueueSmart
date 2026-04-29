@@ -6,11 +6,10 @@ export default function CustomerLayout() {
       <Stack.Screen name="qr-scan" />
       <Stack.Screen name="index" />
       <Stack.Screen name="notifications" />
+      <Stack.Screen name="notification-settings" />
+      <Stack.Screen name="profile" />
       <Stack.Screen name="leave-options" />
       <Stack.Screen name="leave-confirm" />
-      <Stack.Screen name="reschedule" />
-      <Stack.Screen name="pick-date" />
-      <Stack.Screen name="rescheduled" />
     </Stack>
   );
 }

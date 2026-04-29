@@ -1,27 +1,98 @@
 import React, { useState } from 'react';
 import {
+  Alert,
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, SafeAreaView, ScrollView, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Colors } from '@/constants/colors';
-import { useT } from '@/context/AppContext';
+import { useT, useApp } from '@/context/AppContext';
 import Logo from '@/components/Logo';
 import LanguagePicker from '@/components/LanguagePicker';
+import { supabase } from '@/lib/supabase';
 
 export default function SignupScreen() {
   const router = useRouter();
   const t = useT();
+  const { setIsLoggedIn, setRole } = useApp();
 
   const [fullName, setFullName] = useState('');
-  const [phone, setPhone] = useState('+63 912 345 6789');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [agreedTerms, setAgreedTerms] = useState(false);
   const [isPriority, setIsPriority] = useState(false);
 
-  const handleContinue = () => {
-    router.push('/(auth)/verify-otp');
+  const handleContinue = async () => {
+    if (!fullName || !email || !password) {
+      Alert.alert('Error', 'Please enter your name, email, and password.');
+      return;
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail.endsWith('@hcdc.edu.ph')) {
+      Alert.alert('Invalid email', 'Only @hcdc.edu.ph accounts can register.');
+      return;
+    }
+
+    const { data, error } = await supabase.auth.signUp({
+      email: normalizedEmail,
+      password,
+    });
+
+    if (error) {
+      Alert.alert('Signup failed', error.message);
+      return;
+    }
+
+    const userId = data.user?.id;
+    if (!userId) {
+      Alert.alert('Signup pending', 'Please check your email to confirm registration.');
+      return;
+    }
+
+    if (!data.session) {
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password,
+      });
+
+      if (signInError) {
+        Alert.alert('Signup pending', 'Please check your email to confirm registration.');
+        return;
+      }
+    }
+
+    const { error: profileError } = await supabase.from('profiles').insert({
+      id: userId,
+      full_name: fullName,
+      email: normalizedEmail,
+      phone,
+      role: 'customer',
+    });
+
+    if (profileError) {
+      Alert.alert('Profile save failed', profileError.message);
+      return;
+    }
+
+    const { error: eventError } = await supabase.from('signup_events').insert({
+      user_id: userId,
+      full_name: fullName,
+      email: normalizedEmail,
+      phone,
+      role: 'customer',
+      accepted: true,
+    });
+
+    if (eventError) {
+      console.log('Signup event save failed:', eventError.message);
+    }
+
+    setIsLoggedIn(true);
+    setRole('customer');
+    router.replace('/(customer)/qr-scan');
   };
 
   return (
@@ -47,11 +118,22 @@ export default function SignupScreen() {
               placeholderTextColor={Colors.gray}
             />
 
+            <Text style={[styles.label, { marginTop: 12 }]}>{t('emailOrPhone')}</Text>
+            <TextInput
+              style={styles.input}
+              value={email}
+              onChangeText={setEmail}
+              placeholderTextColor={Colors.gray}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+
             <Text style={[styles.label, { marginTop: 12 }]}>{t('phoneNumber')}</Text>
             <TextInput
               style={styles.input}
               value={phone}
               onChangeText={setPhone}
+              placeholder="+63 912 345 6789"
               placeholderTextColor={Colors.gray}
               keyboardType="phone-pad"
             />

@@ -4,7 +4,7 @@ import {
   SafeAreaView, ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Hop as Home, Bell } from 'lucide-react-native';
+import { Hop as Home, Bell, User } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 import { useApp, useT } from '@/context/AppContext';
 import Logo from '@/components/Logo';
@@ -71,14 +71,6 @@ export default function CustomerHomeScreen() {
           >
             <Text style={styles.leaveBtnText}>{t('leaveQueue')}</Text>
           </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.rescheduleBtn}
-            onPress={() => router.push('/(customer)/reschedule')}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.rescheduleBtnText}>{t('reschedule')}</Text>
-          </TouchableOpacity>
         </View>
       </ScrollView>
 
@@ -93,6 +85,13 @@ export default function CustomerHomeScreen() {
         >
           <Bell color={Colors.gray} size={24} />
         </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.tabItem}
+          onPress={() => router.push('/(customer)/profile')}
+          activeOpacity={0.8}
+        >
+          <User color={Colors.gray} size={24} />
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
@@ -104,7 +103,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 8,
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   scroll: { paddingHorizontal: 20, paddingBottom: 20 },
   ticketCard: {

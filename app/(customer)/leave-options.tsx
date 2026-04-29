@@ -36,15 +36,6 @@ export default function LeaveOptionsScreen() {
 
         <TouchableOpacity
           style={styles.option}
-          onPress={() => router.push('/(customer)/reschedule')}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.optionTitle}>{t('rescheduleForLater')}</Text>
-          <Text style={styles.optionSubtitle}>Choose a new date and time</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.option}
           onPress={() => router.push('/(customer)/leave-confirm')}
           activeOpacity={0.8}
         >

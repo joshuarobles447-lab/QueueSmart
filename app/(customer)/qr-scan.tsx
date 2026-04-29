@@ -1,29 +1,90 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet,
-  SafeAreaView, Modal, TextInput,
+  Alert,
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  SafeAreaView,
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import QRCode from 'react-native-qrcode-svg';
+import { Camera } from 'expo-camera';
 import { Colors } from '@/constants/colors';
-import { useT, useApp } from '@/context/AppContext';
+import { useT } from '@/context/AppContext';
 import Logo from '@/components/Logo';
+import { supabase } from '@/lib/supabase';
+
+const CameraView = Camera as any;
 
 export default function QRScanScreen() {
-  const router = useRouter();
   const t = useT();
-  const { ticketNumber } = useApp();
-  const [codeModal, setCodeModal] = useState(false);
-  const [manualCode, setManualCode] = useState('');
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [scanned, setScanned] = useState(false);
+  const [scanResult, setScanResult] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleJoin = () => {
-    router.replace('/');
+  useEffect(() => {
+    (async () => {
+      const { status } = await Camera.requestCameraPermissionsAsync();
+      setHasPermission(status === 'granted');
+    })();
+  }, []);
+
+  const handleBarCodeScanned = async ({ data }: { data: string }) => {
+    if (scanned) return;
+    setScanned(true);
+    setIsSaving(true);
+
+    const ticket = data.startsWith('SMARTQUEUE:') ? data.split(':')[1] : data;
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    const userId = sessionData?.session?.user?.id;
+
+    if (sessionError || !userId) {
+      setIsSaving(false);
+      Alert.alert('Error', 'Unable to record scan. Please log in again.');
+      return;
+    }
+
+    const { error } = await supabase.from('queue_entries').insert({
+      user_id: userId,
+      ticket,
+      status: 'waiting',
+    });
+
+    setIsSaving(false);
+
+    if (error) {
+      Alert.alert('Error', 'Unable to save scanned ticket: ' + error.message);
+      return;
+    }
+
+    setScanResult(ticket);
+    Alert.alert('Scan recorded', `Ticket saved: ${ticket}`);
   };
 
-  const handleManualJoin = () => {
-    setCodeModal(false);
-    router.replace('/');
+  const handleScanAgain = () => {
+    setScanned(false);
+    setScanResult(null);
   };
+
+  if (hasPermission === null) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.container}>
+          <Text style={styles.message}>Requesting camera permission...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (hasPermission === false) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.container}>
+          <Text style={styles.message}>Camera access is required to scan QR codes.</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -34,58 +95,25 @@ export default function QRScanScreen() {
 
         <Text style={styles.title}>{t('scanQr')}</Text>
 
-        <View style={styles.qrContainer}>
-          <View style={styles.qrBox}>
-            <QRCode
-              value={`SMARTQUEUE:${ticketNumber}`}
-              size={180}
-              backgroundColor="white"
-              color="black"
-            />
-          </View>
-          <View style={styles.cornerTL} />
-          <View style={styles.cornerTR} />
-          <View style={styles.cornerBL} />
-          <View style={styles.cornerBR} />
-        </View>
-
-        <Text style={styles.showText}>{t('showGuard')}</Text>
-
-        <TouchableOpacity style={styles.joinBtn} onPress={handleJoin} activeOpacity={0.85}>
-          <Text style={styles.joinBtnText}>{t('joinQueue')}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.manualBtn}
-          onPress={() => setCodeModal(true)}
-          activeOpacity={0.85}
+        <CameraView
+          style={styles.camera}
+          onBarCodeScanned={scanned ? undefined : handleBarCodeScanned}
         >
-          <Text style={styles.manualBtnText}>{t('enterCodeManually')}</Text>
-        </TouchableOpacity>
-      </View>
+          <View style={styles.scanFrame} />
+        </CameraView>
 
-      <Modal visible={codeModal} transparent animationType="slide" onRequestClose={() => setCodeModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
-            <Text style={styles.modalTitle}>{t('enterCodeManually')}</Text>
-            <TextInput
-              style={styles.codeInput}
-              value={manualCode}
-              onChangeText={setManualCode}
-              placeholder="A-001"
-              placeholderTextColor={Colors.gray}
-              autoCapitalize="characters"
-              textAlign="center"
-            />
-            <TouchableOpacity style={styles.joinBtn} onPress={handleManualJoin} activeOpacity={0.85}>
-              <Text style={styles.joinBtnText}>{t('joinQueue')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setCodeModal(false)} style={{ marginTop: 12 }}>
-              <Text style={styles.cancelText}>{t('cancel')}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+        <Text style={styles.scanText}>
+          {scanned ? `Scanned: ${scanResult ?? 'unknown'}` : 'Point the camera at a QR code'}
+        </Text>
+
+        {scanned && (
+          <TouchableOpacity style={styles.scanAgainButton} onPress={handleScanAgain} activeOpacity={0.85}>
+            <Text style={styles.scanAgainText}>Scan again</Text>
+          </TouchableOpacity>
+        )}
+
+        {isSaving && <Text style={styles.savingText}>Saving scan...</Text>}
+      </View>
     </SafeAreaView>
   );
 }
@@ -98,118 +126,57 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 20,
   },
-  logoRow: { marginBottom: 24 },
+  logoRow: {
+    alignSelf: 'flex-start',
+    marginBottom: 24,
+  },
   title: {
     color: Colors.white,
     fontSize: 20,
     fontFamily: 'Poppins-Bold',
-    marginBottom: 28,
+    marginBottom: 16,
   },
-  qrContainer: {
-    position: 'relative',
-    padding: 4,
-    marginBottom: 20,
+  camera: {
+    width: '100%',
+    height: 360,
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 16,
   },
-  qrBox: {
-    backgroundColor: Colors.white,
-    padding: 16,
-    borderRadius: 12,
+  scanFrame: {
+    flex: 1,
+    borderWidth: 2,
+    borderColor: Colors.teal,
+    margin: 48,
+    borderRadius: 16,
   },
-  cornerTL: {
-    position: 'absolute', top: 0, left: 0,
-    width: 28, height: 28,
-    borderTopWidth: 4, borderLeftWidth: 4,
-    borderColor: Colors.teal, borderTopLeftRadius: 8,
-  },
-  cornerTR: {
-    position: 'absolute', top: 0, right: 0,
-    width: 28, height: 28,
-    borderTopWidth: 4, borderRightWidth: 4,
-    borderColor: Colors.teal, borderTopRightRadius: 8,
-  },
-  cornerBL: {
-    position: 'absolute', bottom: 0, left: 0,
-    width: 28, height: 28,
-    borderBottomWidth: 4, borderLeftWidth: 4,
-    borderColor: Colors.teal, borderBottomLeftRadius: 8,
-  },
-  cornerBR: {
-    position: 'absolute', bottom: 0, right: 0,
-    width: 28, height: 28,
-    borderBottomWidth: 4, borderRightWidth: 4,
-    borderColor: Colors.teal, borderBottomRightRadius: 8,
-  },
-  showText: {
+  scanText: {
     color: Colors.grayLight,
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: 'Poppins-Regular',
     textAlign: 'center',
-    marginBottom: 28,
-    paddingHorizontal: 20,
+    marginBottom: 16,
   },
-  joinBtn: {
+  scanAgainButton: {
     backgroundColor: Colors.teal,
     borderRadius: 8,
     paddingVertical: 14,
-    alignItems: 'center',
-    width: '100%',
-    marginBottom: 12,
+    paddingHorizontal: 24,
   },
-  joinBtnText: {
+  scanAgainText: {
     color: Colors.white,
     fontSize: 16,
     fontFamily: 'Poppins-Bold',
   },
-  manualBtn: {
-    borderRadius: 8,
-    paddingVertical: 14,
-    alignItems: 'center',
-    width: '100%',
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  manualBtnText: {
-    color: Colors.grayLight,
-    fontSize: 14,
-    fontFamily: 'Poppins-SemiBold',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  modalBox: {
-    backgroundColor: Colors.card,
-    borderRadius: 16,
-    padding: 24,
-    width: '100%',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  modalTitle: {
-    color: Colors.white,
-    fontSize: 18,
-    fontFamily: 'Poppins-Bold',
-    marginBottom: 16,
-  },
-  codeInput: {
-    backgroundColor: Colors.inputBg,
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: Colors.white,
-    fontSize: 22,
-    fontFamily: 'Poppins-Bold',
-    width: '100%',
-    marginBottom: 16,
-    letterSpacing: 4,
-  },
-  cancelText: {
+  savingText: {
     color: Colors.gray,
-    fontSize: 14,
+    fontSize: 13,
+    fontFamily: 'Poppins-Regular',
+    marginTop: 10,
+  },
+  message: {
+    color: Colors.white,
+    fontSize: 16,
     fontFamily: 'Poppins-Regular',
     textAlign: 'center',
   },
