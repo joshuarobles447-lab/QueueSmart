@@ -6,7 +6,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Hop as Home, Bell, User } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
-import { useT } from '@/context/AppContext';
+import { useApp, useT } from '@/context/AppContext';
 import Logo from '@/components/Logo';
 import { supabase } from '@/lib/supabase';
 
@@ -39,6 +39,7 @@ const getOrdinalSuffix = (value: number) => {
 export default function CustomerHomeScreen() {
   const router = useRouter();
   const t = useT();
+  const { setCurrentQueueEntry } = useApp();
 
   const [ticketNumber, setTicketNumber] = useState<string>('None');
   const [queuePosition, setQueuePosition] = useState<number>(0);
@@ -78,8 +79,9 @@ export default function CustomerHomeScreen() {
             const waitingEntries = allEntries.filter((entry: any) => entry.status === 'waiting');
             const calledEntries = allEntries.filter((entry: any) => entry.status === 'called');
             const myWaitingPosition = waitingEntries.findIndex((e: any) => e.id === myEntry.id) + 1;
+            const position = myEntry.status === 'called' ? 0 : myWaitingPosition > 0 ? myWaitingPosition : 0;
 
-            setQueuePosition(myEntry.status === 'called' ? 0 : myWaitingPosition > 0 ? myWaitingPosition : 0);
+            setQueuePosition(position);
 
             const mappedList: { ticket: string; status: string }[] = [];
             if (myEntry.status === 'called') {
@@ -105,6 +107,12 @@ export default function CustomerHomeScreen() {
             }
 
             setQueueList(mappedList.slice(0, 5));
+            setCurrentQueueEntry({
+              ticket: myEntry.ticket,
+              queueCode: myEntry.queue_code || 'None',
+              position,
+              status: myEntry.status === 'called' ? 'called' : 'waiting',
+            });
           }
         }
       } else {
@@ -113,6 +121,7 @@ export default function CustomerHomeScreen() {
         setQueueCode('None');
         setQueueStatus('none');
         setQueueList([]);
+        setCurrentQueueEntry({ ticket: 'None', queueCode: 'None', position: 0, status: 'none' });
       }
     };
 

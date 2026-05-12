@@ -8,6 +8,13 @@ interface QueueItem {
   status: 'serving' | 'next' | 'standby' | 'call';
 }
 
+interface CurrentQueueEntry {
+  ticket: string;
+  queueCode: string;
+  position: number;
+  status: 'waiting' | 'called' | 'none';
+}
+
 interface AppState {
   role: Role;
   setRole: (role: Role) => void;
@@ -19,6 +26,8 @@ interface AppState {
   setTicketNumber: (t: string) => void;
   queuePosition: number;
   setQueuePosition: (n: number) => void;
+  currentQueueEntry: CurrentQueueEntry;
+  setCurrentQueueEntry: (entry: CurrentQueueEntry) => void;
   queueList: QueueItem[];
   setQueueList: (items: QueueItem[]) => void;
   inQueueCount: number;
@@ -63,6 +72,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [ticketNumber, setTicketNumber] = useState('');
   const [queuePosition, setQueuePosition] = useState(0);
+  const [currentQueueEntry, setCurrentQueueEntry] = useState<CurrentQueueEntry>({
+    ticket: 'None',
+    queueCode: 'None',
+    position: 0,
+    status: 'none',
+  });
   const [queueList, setQueueList] = useState<QueueItem[]>([]);
   const [inQueueCount, setInQueueCount] = useState(0);
   const [nowServing, setNowServing] = useState('');
@@ -103,6 +118,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setTicketNumber,
         queuePosition,
         setQueuePosition,
+        currentQueueEntry,
+        setCurrentQueueEntry,
         queueList,
         setQueueList,
         inQueueCount,

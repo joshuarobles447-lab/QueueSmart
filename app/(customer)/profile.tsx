@@ -24,11 +24,20 @@ interface ProfileData {
 export default function ProfileScreen() {
   const router = useRouter();
   const t = useT();
+  const { currentQueueEntry } = useApp();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [ticketNumber, setTicketNumber] = useState('None');
-  const [queuePosition, setQueuePosition] = useState(0);
-  const [queueStatus, setQueueStatus] = useState<'waiting' | 'called' | 'none'>('none');
+  const [ticketNumber, setTicketNumber] = useState(currentQueueEntry.ticket || 'None');
+  const [queuePosition, setQueuePosition] = useState(currentQueueEntry.position);
+  const [queueStatus, setQueueStatus] = useState<'waiting' | 'called' | 'none'>(currentQueueEntry.status);
+
+  useEffect(() => {
+    if (currentQueueEntry.status !== 'none') {
+      setTicketNumber(currentQueueEntry.ticket);
+      setQueuePosition(currentQueueEntry.position);
+      setQueueStatus(currentQueueEntry.status);
+    }
+  }, [currentQueueEntry]);
 
   useEffect(() => {
     async function loadProfile() {
@@ -69,10 +78,11 @@ export default function ProfileScreen() {
 
       if (myEntries && myEntries.length > 0) {
         const myEntry = myEntries[0];
+        const status = myEntry.status === 'called' ? 'called' : 'waiting';
         setTicketNumber(myEntry.ticket);
-        setQueueStatus(myEntry.status === 'called' ? 'called' : 'waiting');
+        setQueueStatus(status);
 
-        if (myEntry.status === 'waiting') {
+        if (status === 'waiting') {
           const { data: waitingEntries } = await supabase
             .from('queue_entries')
             .select('*')
@@ -94,7 +104,7 @@ export default function ProfileScreen() {
 
     loadProfile();
     loadQueueInfo();
-  }, []);
+  }, [currentQueueEntry]);
 
   return (
     <SafeAreaView style={styles.safe}>
