@@ -52,14 +52,35 @@ export default function StaffPanelScreen() {
     registerQueue();
 
     const fetchQueue = async () => {
-      const { data, error } = await supabase
+      const { data: waitingData, error: waitingError } = await supabase
         .from('queue_entries')
         .select('*')
         .eq('status', 'waiting')
         .order('created_at', { ascending: true });
 
-      if (data) {
-        const mappedQueue = data.map((entry: any) => ({
+      const { data: calledData } = await supabase
+        .from('queue_entries')
+        .select('*')
+        .eq('status', 'called')
+        .order('created_at', { ascending: true })
+        .limit(1);
+
+      if (calledData && calledData.length > 0) {
+        const current = calledData[0];
+        setCurrentCustomer({
+          id: current.id.toString(),
+          name: current.customer_name || 'Unknown User',
+          ticketNumber: current.ticket,
+          waitTime: Math.floor((new Date().getTime() - new Date(current.created_at).getTime()) / 60000),
+          status: current.status,
+          created_at: current.created_at,
+        });
+      } else {
+        setCurrentCustomer(null);
+      }
+
+      if (waitingData) {
+        const mappedQueue = waitingData.map((entry: any) => ({
           id: entry.id.toString(),
           name: entry.customer_name || 'Unknown User',
           ticketNumber: entry.ticket,
@@ -97,11 +118,27 @@ export default function StaffPanelScreen() {
     };
   }, []);
 
-  const handleCallNext = () => {
+  const handleCallNext = async () => {
     if (queueList.length > 0) {
-      Alert.alert('Success', `Called customer: ${queueList[0].name}`, [{ text: 'OK' }]);
-      const newQueue = queueList.slice(1);
-      setQueueList(newQueue);
+      const nextEntry = queueList[0];
+      await supabase
+        .from('queue_entries')
+        .update({ status: 'served' })
+        .eq('status', 'called');
+
+      const { error } = await supabase
+        .from('queue_entries')
+        .update({ status: 'called' })
+        .eq('id', nextEntry.id);
+
+      if (error) {
+        Alert.alert('Error', 'Unable to call next customer.');
+        return;
+      }
+
+      setCurrentCustomer(nextEntry);
+      setQueueList(queueList.slice(1));
+      Alert.alert('Success', `Called customer: ${nextEntry.name}`, [{ text: 'OK' }]);
     } else {
       Alert.alert('Queue Empty', 'No customers waiting', [{ text: 'OK' }]);
     }

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
   SafeAreaView, ScrollView,
@@ -6,13 +6,35 @@ import {
 import { useRouter } from 'expo-router';
 import { ArrowLeft, AlertCircle } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
-import { useApp, useT } from '@/context/AppContext';
+import { useT } from '@/context/AppContext';
 import Logo from '@/components/Logo';
 import { supabase } from '@/lib/supabase';
 export default function LeaveConfirmScreen() {
   const router = useRouter();
   const t = useT();
-  const { ticketNumber } = useApp();
+  const [ticketNumber, setTicketNumber] = useState('None');
+
+  useEffect(() => {
+    const loadCurrentTicket = async () => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData?.session?.user?.id;
+      if (!userId) return;
+
+      const { data: entries } = await supabase
+        .from('queue_entries')
+        .select('ticket')
+        .eq('user_id', userId)
+        .in('status', ['waiting', 'called'])
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (entries && entries.length > 0) {
+        setTicketNumber(entries[0].ticket);
+      }
+    };
+
+    loadCurrentTicket();
+  }, []);
 
   const handleLeave = async () => {
     const { data: sessionData } = await supabase.auth.getSession();

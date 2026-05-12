@@ -61,11 +61,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<Role>(null);
   const [language, setLanguage] = useState<Language>('en');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [ticketNumber, setTicketNumber] = useState('A-001');
-  const [queuePosition, setQueuePosition] = useState(1);
-  const [queueList, setQueueList] = useState<QueueItem[]>(defaultQueueList);
-  const [inQueueCount, setInQueueCount] = useState(15);
-  const [nowServing, setNowServing] = useState('A-001');
+  const [ticketNumber, setTicketNumber] = useState('');
+  const [queuePosition, setQueuePosition] = useState(0);
+  const [queueList, setQueueList] = useState<QueueItem[]>([]);
+  const [inQueueCount, setInQueueCount] = useState(0);
+  const [nowServing, setNowServing] = useState('');
   const [acceptingCustomers, setAcceptingCustomers] = useState(true);
   const [queuePaused, setQueuePaused] = useState(false);
   const [noShowAlertsEnabled, setNoShowAlertsEnabled] = useState(true);

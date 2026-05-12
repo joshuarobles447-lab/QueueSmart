@@ -6,7 +6,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Hop as Home, Bell, User } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
-import { useApp, useT } from '@/context/AppContext';
+import { useT } from '@/context/AppContext';
 import Logo from '@/components/Logo';
 import { supabase } from '@/lib/supabase';
 
@@ -14,12 +14,14 @@ const statusColors: Record<string, string> = {
   serving: Colors.serving,
   next: Colors.nextUp,
   standby: Colors.standby,
+  waiting: Colors.yellow,
 };
 
 const statusLabels: Record<string, string> = {
   serving: 'servingNow',
   next: 'nextUp',
   standby: 'standBy',
+  waiting: 'waiting',
   call: 'call',
 };
 
@@ -37,12 +39,12 @@ const getOrdinalSuffix = (value: number) => {
 export default function CustomerHomeScreen() {
   const router = useRouter();
   const t = useT();
-  const { queueList: defaultQueueList } = useApp();
-  
+
   const [ticketNumber, setTicketNumber] = useState<string>('None');
   const [queuePosition, setQueuePosition] = useState<number>(0);
   const [queueCode, setQueueCode] = useState<string>('None');
-const [queueList, setQueueList] = useState<{ ticket: string; status: string }[]>(defaultQueueList);
+  const [queueStatus, setQueueStatus] = useState<'waiting' | 'called' | 'none'>('none');
+  const [queueList, setQueueList] = useState<{ ticket: string; status: string }[]>([]);
   useEffect(() => {
     const fetchMyQueue = async () => {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -61,6 +63,7 @@ const [queueList, setQueueList] = useState<{ ticket: string; status: string }[]>
         const myEntry = myEntries[0];
         setTicketNumber(myEntry.ticket);
         setQueueCode(myEntry.queue_code || 'None');
+        setQueueStatus(myEntry.status === 'called' ? 'called' : 'waiting');
 
         // Fetch everyone in the same queue
         if (myEntry.queue_code) {
@@ -68,25 +71,48 @@ const [queueList, setQueueList] = useState<{ ticket: string; status: string }[]>
             .from('queue_entries')
             .select('*')
             .eq('queue_code', myEntry.queue_code)
-            .eq('status', 'waiting')
+            .in('status', ['waiting', 'called'])
             .order('created_at', { ascending: true });
 
           if (allEntries) {
-            const pos = allEntries.findIndex((e: any) => e.id === myEntry.id) + 1;
-            setQueuePosition(pos > 0 ? pos : 0);
-            
-            // Map queueList for display
-            const mappedList = allEntries.slice(0, 5).map((e: any, index: number) => ({
-              ticket: e.ticket,
-              status: index === 0 ? 'serving' : index === 1 ? 'next' : 'standby'
-            }));
-            setQueueList(mappedList);
+            const waitingEntries = allEntries.filter((entry: any) => entry.status === 'waiting');
+            const calledEntries = allEntries.filter((entry: any) => entry.status === 'called');
+            const myWaitingPosition = waitingEntries.findIndex((e: any) => e.id === myEntry.id) + 1;
+
+            setQueuePosition(myEntry.status === 'called' ? 0 : myWaitingPosition > 0 ? myWaitingPosition : 0);
+
+            const mappedList: { ticket: string; status: string }[] = [];
+            if (myEntry.status === 'called') {
+              mappedList.push({ ticket: myEntry.ticket, status: 'serving' });
+              mappedList.push(
+                ...waitingEntries.slice(0, 4).map((e: any, index: number) => ({
+                  ticket: e.ticket,
+                  status: index === 0 ? 'next' : 'standby',
+                }))
+              );
+            } else {
+              if (calledEntries.length > 0) {
+                mappedList.push({ ticket: calledEntries[0].ticket, status: 'serving' });
+              }
+              mappedList.push(
+                ...waitingEntries
+                  .slice(0, myWaitingPosition > 0 ? myWaitingPosition : 0)
+                  .map((e: any, index: number) => ({
+                    ticket: e.ticket,
+                    status: index === 0 ? 'next' : 'standby',
+                  }))
+              );
+            }
+
+            setQueueList(mappedList.slice(0, 5));
           }
         }
       } else {
         setTicketNumber('None');
         setQueuePosition(0);
         setQueueCode('None');
+        setQueueStatus('none');
+        setQueueList([]);
       }
     };
 
@@ -118,6 +144,13 @@ const [queueList, setQueueList] = useState<{ ticket: string; status: string }[]>
         <View style={styles.ticketCard}>
           <Text style={styles.ticketLabel}>{t('yourControlNumber')}</Text>
           <Text style={styles.ticketNumber}>{ticketNumber}</Text>
+          <Text style={styles.ticketStatus}>
+            {queueStatus === 'called'
+              ? t('servingNow')
+              : queueStatus === 'waiting'
+              ? t('waiting')
+              : ''}
+          </Text>
           <Text style={styles.queueCode}>Queue: {queueCode}</Text>
           <View style={styles.ticketRow}>
             <View style={styles.ticketStat}>
@@ -207,6 +240,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins-Bold',
     letterSpacing: 2,
     lineHeight: 60,
+  },
+  ticketStatus: {
+    color: Colors.white,
+    fontSize: 14,
+    fontFamily: 'Poppins-SemiBold',
+    marginTop: 8,
   },
   queueCode: {
     color: Colors.white,

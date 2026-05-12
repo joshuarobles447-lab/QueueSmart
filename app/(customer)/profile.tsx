@@ -24,9 +24,11 @@ interface ProfileData {
 export default function ProfileScreen() {
   const router = useRouter();
   const t = useT();
-  const { ticketNumber, queuePosition } = useApp();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [ticketNumber, setTicketNumber] = useState('None');
+  const [queuePosition, setQueuePosition] = useState(0);
+  const [queueStatus, setQueueStatus] = useState<'waiting' | 'called' | 'none'>('none');
 
   useEffect(() => {
     async function loadProfile() {
@@ -52,7 +54,46 @@ export default function ProfileScreen() {
       setLoading(false);
     }
 
+    async function loadQueueInfo() {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData?.session?.user?.id;
+      if (!userId) return;
+
+      const { data: myEntries } = await supabase
+        .from('queue_entries')
+        .select('*')
+        .eq('user_id', userId)
+        .in('status', ['waiting', 'called'])
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (myEntries && myEntries.length > 0) {
+        const myEntry = myEntries[0];
+        setTicketNumber(myEntry.ticket);
+        setQueueStatus(myEntry.status === 'called' ? 'called' : 'waiting');
+
+        if (myEntry.status === 'waiting') {
+          const { data: waitingEntries } = await supabase
+            .from('queue_entries')
+            .select('*')
+            .eq('queue_code', myEntry.queue_code)
+            .eq('status', 'waiting')
+            .order('created_at', { ascending: true });
+
+          const position = waitingEntries?.findIndex((entry: any) => entry.id === myEntry.id) + 1 || 0;
+          setQueuePosition(position > 0 ? position : 0);
+        } else {
+          setQueuePosition(0);
+        }
+      } else {
+        setTicketNumber('None');
+        setQueuePosition(0);
+        setQueueStatus('none');
+      }
+    }
+
     loadProfile();
+    loadQueueInfo();
   }, []);
 
   return (
@@ -99,7 +140,9 @@ export default function ProfileScreen() {
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Queue Position</Text>
-            <Text style={styles.infoValue}>{queuePosition}</Text>
+            <Text style={styles.infoValue}>
+              {queuePosition > 0 ? `${queuePosition}` : queueStatus === 'called' ? t('servingNow') : '—'}
+            </Text>
           </View>
         </View>
 
